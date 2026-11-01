@@ -14,6 +14,7 @@ Nothing of the mod is copied whole: an archive of another game version would los
 Other members the mod changed (layouts, animations: a black screen fix duplicates the base folder's) are listed, not
 taken. The report is printed as JSON. Run with the setup's python (compression.zstd).
 - System/Resource/ResourceSizeTable.Product.<newest>.rsizetable.zs: the entries of the files that grew grow with them.
+- The same archive's controller-picture animations (ANIMS): curves the mod moved, key for key, take its values.
 """
 import argparse
 import compression.zstd as zstd
@@ -151,12 +152,63 @@ def bntx_transplant(game, mod, names):
     return bytes(out)
 
 
+def flan(d):
+    """(pane or material, tag, index, target) -> (curve type, [(key values, absolute key offset)]) of a FLAN."""
+    assert d[:4]==b'FLAN'
+    bom=d[4:6]; E='>' if bom==b'\xfe\xff' else '<'
+    hs,=struct.unpack_from(E+'H',d,6); n,=struct.unpack_from(E+'H',d,0x10)
+    off=hs; out={}
+    for _ in range(n):
+        mg=d[off:off+4]; sz,=struct.unpack_from(E+'I',d,off+4)
+        if mg==b'pai1':
+            p=off
+            fs,loop,tc,ac,ato=struct.unpack_from(E+'HBxHHI',d,p+8)
+            for i in range(ac):
+                eo=p+struct.unpack_from(E+'I',d,p+ato+4*i)[0]
+                name=d[eo:eo+28].split(b'\0')[0].decode()
+                tcnt,ismat=struct.unpack_from('BB',d,eo+28)
+                for t in range(tcnt):
+                    to=eo+struct.unpack_from(E+'I',d,eo+32+4*t)[0]
+                    tm=d[to:to+4].decode(); cnt=d[to+4]
+                    for c in range(cnt):
+                        io=to+struct.unpack_from(E+'I',d,to+8+4*c)[0]
+                        idx,tgt,ct,kc,ko=struct.unpack_from(E+'BBBxHxxI',d,io)
+                        ks=[]
+                        for k in range(kc):
+                            ka=io+ko+(12 if ct==2 else 8)*k
+                            if ct==2: ks.append((struct.unpack_from(E+'3f',d,ka),ka))
+                            else: ks.append((struct.unpack_from(E+'fH',d,ka),ka))
+                        out[(name,tm,idx,tgt)]=(ct,ks)
+        off+=sz
+    return out,E
+
+
+def flan_merge(game, mod):
+    """The FLAN game with each animation curve the mod's FLAN has with the same pane, target, type and key frames
+    taking the mod's values: the mod moved the callout points and lines for its controller picture."""
+    g, E = flan(game); m, E2 = flan(mod)
+    assert E == E2
+    out, taken = bytearray(game), 0
+    for k, (ct, gk) in g.items():
+        if k not in m or m[k][0] != ct or len(m[k][1]) != len(gk) or [x[0][0] for x in m[k][1]] != [x[0][0] for x in gk]:
+            continue
+        if [x[0] for x in m[k][1]] == [x[0] for x in gk]:
+            continue
+        n = 12 if ct == 2 else 8
+        for (_, ga), (_, ma) in zip(gk, m[k][1]):
+            out[ga:ga + n] = mod[ma:ma + n]
+        taken += 1
+    return bytes(out), taken
+
+
 # StavaasEVG's Dualsense UI (gamebanana.com/mods/445517), checked by decoding both versions: the PlayStation face
 # buttons, L1/L2, d-pad, R1/R2 shapes, prompt button bases and the controller picture.
 TEXTURES = ('Nt_KeyTexA_00', 'Nt_KeyTexB_00', 'Nt_KeyTexX_00', 'Nt_KeyTexY_00', 'Nt_KeyTexL_00', 'Nt_KeyTexZL_00',
             'ButtonIconL46NN_00', 'ButtonIconL46NN_01', 'ConProR_00', 'ConProR_Line', 'ConProZR_00', 'ConProZR_Line',
             'Nt_KeyBtnBaseBoxLL_00', 'Nt_KeyBtnSubBaseAL_00', 'Nt_KeyBtnSubBaseBL_00', 'Controller_Pro', 'Controller_Pro1',
             'ControllerSh_Pro', 'ControllerSh_Pro1')
+# The callout points and lines of the controller pictures (System > Basic Controls, the tutorials) move with them.
+ANIMS = r'anim/Pa(SystemController|ActionGuide)_00_\w+\.bflan'
 COMMON = {'v111': '110', 'v121': '110', 'v143': '140'}
 ARCHIVE = f'UI/LayoutArchive/Common.Product.{COMMON[args.version]}.Nin_NX_NVN.blarc.zs'
 BNTX = 'timg/__Combined.bntx'
@@ -221,8 +273,15 @@ if mod_common:
         else:
             taken.append(name)
     assert taken, f'no texture of the mod could be taken: {skipped}'
-    outputs[ARCHIVE] = sarc_replace(game, {BNTX: bntx_transplant(gb, mb, taken)})
-    report['common'] = dict(mod_archive=mod_common, textures=taken, skipped=skipped)
+    members = {BNTX: bntx_transplant(gb, mb, taken)}
+    curves = {}
+    for name in sorted(gm):
+        if re.fullmatch(ANIMS, name) and name in mm and game[gm[name][0]:gm[name][1]] != mod[mm[name][0]:mm[name][1]]:
+            body, count = flan_merge(game[gm[name][0]:gm[name][1]], mod[mm[name][0]:mm[name][1]])
+            if count:
+                members[name], curves[name] = body, count
+    outputs[ARCHIVE] = sarc_replace(game, members)
+    report['common'] = dict(mod_archive=mod_common, textures=taken, skipped=skipped, callout_curves=curves)
 fonts = {}
 for path in mod_fonts:
     if path not in originals:

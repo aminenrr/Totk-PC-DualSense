@@ -42,3 +42,6 @@ romfs-patches; output romfs-patches-dualsense, loaded with romfs_patches = <fold
 
 2026-11-01: textures-only output crashed at the title too: the archive grew 0.9 MB past its RESTBL entry (the fonts
 likely did the same at start). The tool now also writes the newest rsizetable with grown entries.
+
+2026-11-01: textures + fonts work in game (with RESTBL). Callout points were off: the tool now copies the mod's values
+into anim/Pa(SystemController|ActionGuide)_00_*.bflan curves that match key for key (73 curves).
