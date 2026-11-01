@@ -12,6 +12,7 @@
 #include <string.h>
 
 #include "cfg.h"
+#include "ds_haptics.h"
 #include "host.h"
 #include "input.h"
 #include "ov.h"
@@ -302,6 +303,19 @@ static float light_share(float f) { return f > 160 ? (f < 320 ? log2f(f / 160) :
 static void rumble_update(uint64_t now) {
     float heavy = 0, light = 0;
     rumble_cfg();
+    // TOTK_DS_HAPTICS=1 with a DualSense on USB: the raw values go to its actuators (runtime/ds_haptics.c) and the
+    // motors stay off. A silent side (stale, not permitted, strength 0) goes as amplitude 0.
+    DsHapticsSide hd[2];
+    for (int s = 0; s < 2; s++) {
+        const VibrationValue *v = &vib_last[s];
+        int live = vib_allowed && rumble_strength > 0 && vib_at[s] && now - vib_at[s] <= RUMBLE_STALE_NS;
+        hd[s] = (DsHapticsSide){live ? v->amp_low : 0, v->freq_low, live ? v->amp_high : 0, v->freq_high};
+    }
+    if (ds_haptics_take(hd)) {
+        if (sent_low || sent_high) input_rumble(0, 0, 0);
+        sent_low = sent_high = 0, sent_at = now;
+        return;
+    }
     for (int s = 0; s < 2 && vib_allowed; s++) {
         if (!vib_at[s] || now - vib_at[s] > RUMBLE_STALE_NS) continue;
         const VibrationValue *v = &vib_last[s];

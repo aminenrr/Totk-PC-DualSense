@@ -29,6 +29,7 @@ static int state;                    // 0 not started, 1 running, -1 disabled or
 static SDL_Gamepad *pad;
 static uint64_t next_scan;
 static int pad_rumble;               // the open gamepad has rumble motors
+static volatile int32_t pad_ds_usb;  // ... and is a DualSense (or Edge) connected by USB (ds_haptics.c), any thread
 static volatile int32_t pad_labels[4];  // ... and the labels of its south, east, west, north buttons (PAD_LABEL_*), any thread
 static int pad_east_a;               // ... and labels its east face button A (Nintendo layout under TOTK_PAD_LAYOUT=auto)
 static int pad_layout = -1;          // PAD_LAYOUT_* in effect for the open gamepad, -1 to pick again; live (cfg_version)
@@ -285,6 +286,7 @@ static void scan_pads(void) {
     if (pad && SDL_GamepadConnected(pad)) return;
     if (pad) {
         SDL_CloseGamepad(pad); pad = NULL; sensor_pad = 0; sensor_ok = 0;
+        plat_xchg32(&pad_ds_usb, 0);
         plat_xchg32(&pad_layout_shown, -1);
         for (int i = 0; i < 4; i++) plat_xchg32(&pad_labels[i], PAD_LABEL_NONE);
         rt_log("input: gamepad disconnected");
@@ -295,6 +297,10 @@ static void scan_pads(void) {
     SDL_free(ids);
     if (!pad) return;
     pad_rumble = SDL_GetBooleanProperty(SDL_GetGamepadProperties(pad), SDL_PROP_GAMEPAD_CAP_RUMBLE_BOOLEAN, false);
+    // Sony 0x054c: DualSense 0x0ce6, DualSense Edge 0x0df2. Only by USB does it expose the audio endpoint of its actuators.
+    Uint16 vid = SDL_GetGamepadVendor(pad), pid = SDL_GetGamepadProduct(pad);
+    plat_xchg32(&pad_ds_usb, vid == 0x054c && (pid == 0x0ce6 || pid == 0x0df2) &&
+                                 SDL_GetGamepadConnectionState(pad) == SDL_JOYSTICK_CONNECTION_WIRED);
     pad_east_a = SDL_GetGamepadButtonLabel(pad, SDL_GAMEPAD_BUTTON_EAST) == SDL_GAMEPAD_BUTTON_LABEL_A;
     for (int i = 0; i < 4; i++) {
         SDL_GamepadButtonLabel lb = SDL_GetGamepadButtonLabel(pad, pad_sdl[PAD_SOUTH + i]);
@@ -583,6 +589,8 @@ int input_capture(int reset, int *id) {
     prev_esc = esc;
     return got;
 }
+
+int input_pad_dualsense_usb(void) { return __atomic_load_n(&pad_ds_usb, __ATOMIC_ACQUIRE); }
 
 int input_rumble_triggers_enabled(void) {
     return cfg_bool("TOTK_RUMBLE_TRIGGERS");

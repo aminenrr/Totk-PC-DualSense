@@ -52,6 +52,8 @@ int input_rumble(uint16_t low, uint16_t high, uint32_t ms);
 uint16_t rumble_motor(float a, float curve, float strength);
 // TOTK_RUMBLE_TRIGGERS=1: input_rumble also drives the impulse triggers (Xbox) with the high motor's value.
 int input_rumble_triggers_enabled(void);
+// 1 while the open gamepad is a DualSense or DualSense Edge connected by USB (runtime/ds_haptics.c). Any thread.
+int input_pad_dualsense_usb(void);
 
 // Motion (TOTK_MOTION=0 turns it off, live). input_motion_start starts the sensor thread once: every 4 ms it reads the
 // gamepad's gyro and accelerometer (when it has them) and feeds motion_global(). Callable from any thread.
