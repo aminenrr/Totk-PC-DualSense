@@ -183,9 +183,13 @@
 # rumble_triggers = 0
 # DualSense HD haptics (1 = on): with a DualSense or DualSense Edge connected by USB, the game's HD rumble plays on
 # its voice-coil actuators through the controller's audio device instead of the two-motor rumble. Other pads, and a
-# DualSense over Bluetooth, keep the rumble above. ds_haptics_strength is the haptics level in percent (10 to 100).
+# DualSense over Bluetooth, keep the rumble above. ds_haptics_strength is the haptics level in percent (10 to 200, clipped
+# at full scale), ds_haptics_curve the exponent on the game's amplitude (0.3 to 1; 1 keeps the game's dynamics) and
+# ds_haptics_freq scales the game's frequencies (25 to 100 percent; lower suits the DualSense's actuators).
 # ds_haptics = 0
 # ds_haptics_strength = 100
+# ds_haptics_curve = 0.5
+# ds_haptics_freq = 100
 # Which gamepad button is Switch A: nintendo (by position: east A, south B, west Y, north X), xbox (south A, east B,
 # west X, north Y, as an Xbox pad labels them; cross A on a PlayStation pad) or auto (nintendo for a pad with Nintendo
 # labels, xbox for the others). xbox_prompts: the buttons as nintendo, and the game's prompts swapped to the Xbox

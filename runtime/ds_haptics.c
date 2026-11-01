@@ -6,9 +6,13 @@
 // device: channels 0 and 1 are the speaker and headset, channels 2 and 3 drive the left and right voice-coil actuators.
 // Each side of the game's VibrationValue becomes two sine waves (the low and the high band at the game's own
 // frequencies), so the controller plays the HD rumble the Switch would instead of runtime/ov_input.c rumble_update's
-// two-motor reduction. The game's amplitude goes through a square root (weak pulses stay felt), the two bands of a side
-// are scaled to sum at most 1, amplitude and frequency follow their targets with a 4 ms one-pole smoothing, and the
-// output never exceeds 0.8 of full scale (TOTK_DS_HAPTICS_STRENGTH scales it down from there).
+// two-motor reduction. The game's amplitude goes through a power curve (TOTK_DS_HAPTICS_CURVE, default 0.5: RenHDrum's
+// square root, weak pulses stay felt; 1 is linear and keeps the game's dynamics), the two bands of a side are scaled to
+// sum at most 1, and the frequencies are scaled by TOTK_DS_HAPTICS_FREQ percent (the Joy-Con's actuators resonate near
+// 160 and 320 Hz, the DualSense's lower, so a lower setting moves the bands where its coils are strongest). Amplitude
+// and frequency follow their targets with a 4 ms one-pole smoothing. TOTK_DS_HAPTICS_STRENGTH is in percent of 0.8 of
+// full scale (10 to 200); the output is clipped at full scale. Every 10 s with vibration, the log gets one line with the
+// value count, frequency ranges and peak amplitude the game sent, for tuning.
 // Bluetooth is not handled here: over Bluetooth the controller has no audio endpoint, and the SDL rumble path stays.
 #include <math.h>
 #include <stdint.h>
@@ -36,6 +40,10 @@ static DsHapticsSide target[2];                // ds_lock: after ds_side
 static uint64_t target_at;                     // ds_lock: plat_now_ns of the last ds_haptics_take, 0 none
 static float gain = DS_CEILING;                // ds_lock
 
+// Game thread: the curve and frequency settings, and the tuning statistics.
+static float curve_exp = 0.5f, freq_scale = 1;
+static struct { uint64_t since; unsigned values; float lo_min, lo_max, hi_min, hi_max, peak; } stats;
+
 // Audio thread only.
 static DsVoice voice[2] = {{0, 0, 0, 0, 160, 320}, {0, 0, 0, 0, 160, 320}};
 static float smoothing;
@@ -50,13 +58,14 @@ static volatile int32_t logged_off, logged_fail;
 
 // RenHDrum make_side: square root of the clamped amplitude, the two bands scaled to sum at most 1, frequencies clamped
 // to 20..1000 Hz with the neutral 160 / 320 Hz for a missing one.
-static float ds_curve(float a) { return a > 0 ? sqrtf(a < 1 ? a : 1) : 0; }   // NaN -> 0
+static float ds_curve(float a) { return a > 0 ? powf(a < 1 ? a : 1, curve_exp) : 0; }   // NaN -> 0
 static float ds_hz(float f, float neutral) {
     if (!(f > 0)) return neutral;
     return f < DS_MIN_HZ ? DS_MIN_HZ : f > DS_MAX_HZ ? DS_MAX_HZ : f;
 }
 static DsHapticsSide ds_side(const DsHapticsSide *v) {
-    DsHapticsSide s = {ds_curve(v->amp_low), ds_hz(v->freq_low, 160), ds_curve(v->amp_high), ds_hz(v->freq_high, 320)};
+    DsHapticsSide s = {ds_curve(v->amp_low), ds_hz(ds_hz(v->freq_low, 160) * freq_scale, 160),
+                       ds_curve(v->amp_high), ds_hz(ds_hz(v->freq_high, 320) * freq_scale, 320)};
     float sum = s.amp_low + s.amp_high;
     if (sum > 1) s.amp_low /= sum, s.amp_high /= sum;
     return s;
@@ -74,7 +83,8 @@ static float ds_next(DsVoice *v, const DsHapticsSide *t, float g) {
     if (v->phase_low >= 1) v->phase_low -= 1;
     if (v->phase_high >= 1) v->phase_high -= 1;
     double x = v->amp_low * sin(2 * M_PI * v->phase_low) + v->amp_high * sin(2 * M_PI * v->phase_high);
-    return (float)((x < -1 ? -1 : x > 1 ? 1 : x) * g);
+    x *= g;
+    return (float)(x < -1 ? -1 : x > 1 ? 1 : x);
 }
 
 // SDL audio callback: fills what the device asks for, in chunks of DS_CHUNK frames, taking the targets once per chunk
@@ -170,7 +180,12 @@ int ds_haptics_take(const DsHapticsSide side[2]) {
         cfg_seen = v;
         enabled = cfg_bool("TOTK_DS_HAPTICS");
         double pct = cfg_double("TOTK_DS_HAPTICS_STRENGTH");
-        pct = pct < 10 ? 10 : pct > 100 ? 100 : pct;
+        pct = pct < 10 ? 10 : pct > 200 ? 200 : pct;
+        double ce = cfg_double("TOTK_DS_HAPTICS_CURVE"), fr = cfg_double("TOTK_DS_HAPTICS_FREQ");
+        curve_exp = (float)(ce >= 0.3 && ce <= 1.0 ? ce : ce > 1.0 ? 1.0 : ce > 0 ? 0.3 : 0.5);
+        freq_scale = (float)((fr >= 25 && fr <= 100 ? fr : fr > 100 ? 100 : fr > 0 ? 25 : 100) / 100);
+        rt_log("ds_haptics: settings strength %.0f%%, curve %.2f, frequency %.0f%%", pct, (double)curve_exp,
+               (double)(freq_scale * 100));
         plat_mutex_lock(&ds_lock);
         gain = DS_CEILING * (float)(pct / 100);
         plat_mutex_unlock(&ds_lock);
@@ -188,6 +203,26 @@ int ds_haptics_take(const DsHapticsSide side[2]) {
         if (now < next_try) return 0;
         next_try = now + DS_RETRY_NS;
         if (!ds_open()) return 0;
+    }
+    for (int s = 0; s < 2; s++) {
+        const DsHapticsSide *v = &side[s];
+        if (!(v->amp_low > 0.01f || v->amp_high > 0.01f)) continue;
+        if (!stats.values) stats.lo_min = stats.hi_min = 1e9f, stats.lo_max = stats.hi_max = stats.peak = 0;
+        stats.values++;
+        if (v->freq_low < stats.lo_min) stats.lo_min = v->freq_low;
+        if (v->freq_low > stats.lo_max) stats.lo_max = v->freq_low;
+        if (v->freq_high < stats.hi_min) stats.hi_min = v->freq_high;
+        if (v->freq_high > stats.hi_max) stats.hi_max = v->freq_high;
+        if (v->amp_low > stats.peak) stats.peak = v->amp_low;
+        if (v->amp_high > stats.peak) stats.peak = v->amp_high;
+    }
+    if (!stats.since) stats.since = now;
+    if (now - stats.since >= 10000000000ull) {
+        if (stats.values)
+            rt_log("ds_haptics: last 10 s: %u values, low band %.0f-%.0f Hz, high band %.0f-%.0f Hz, peak amplitude %.2f",
+                   stats.values, (double)stats.lo_min, (double)stats.lo_max, (double)stats.hi_min, (double)stats.hi_max,
+                   (double)stats.peak);
+        stats.values = 0, stats.since = now;
     }
     DsHapticsSide t[2] = {ds_side(&side[0]), ds_side(&side[1])};
     plat_mutex_lock(&ds_lock);
