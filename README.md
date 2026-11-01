@@ -17,6 +17,7 @@
 - **PlayStation button prompts**: a tool that ports a DualSense UI mod onto your own 1.4.3 files (see below).
 - **Touchpad as a button**: the touchpad click is a gamepad button of its own (`touchpad` in `totk.ini`). To use it as Minus instead of the Create/Share button, press F1, open the bindings, select the gamepad cell of Minus, and press the touchpad.
 - **Impulse triggers on DualSense**: the Xbox impulse-trigger rumble now has a DualSense version. With "Trigger vibration (Xbox)" on in the F1 menu (`rumble_triggers = 1` under `[input]`), the adaptive triggers vibrate along with the rumble, as strong as the right motor, the same signal the Xbox triggers get. It works over USB.
+- **Shadow resolution (1.4.3, experimental)**: `shadow_scale` under `[display]` sizes the sun's shadow maps as a percentage of the game's 800 x 800 per cascade (200 = 1600 x 1600, up to 400). Sharper shadow edges; higher values cost GPU time and memory. Sites from MacNativeGames.
 - **HD haptics over USB (experimental)**: drives the DualSense's voice coils from the game's HD Rumble data. It works, but it still feels like a plain coil buzz rather than Joy-Con HD Rumble, so it is off by default. To try it, add the following under `[input]` (USB only):
 
   ```ini

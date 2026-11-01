@@ -144,6 +144,10 @@
 # Field of view, in percent of the game's own: 70 to 140, 100 (the default) leaves the camera as it is. Higher shows
 # more of the world around Link. Game version 1.4.3 only. Changes while the game runs take effect at once.
 # fov = 100
+# Shadow resolution, percent of the game's 800 x 800 per sun shadow cascade (1.4.3 only): 200 gives 1600 x 1600,
+# 400 gives 3200 x 3200 (sharper shadow edges, more GPU time and memory). 50..400; 100 is the game's own.
+# Takes effect when the game next sets up its shadows (at the latest the next load).
+# shadow_scale = 100
 # Colour adjustment of the picture, HUD included, before it is scaled to the window: brightness (-30 to 30, added in %),
 # contrast and saturation (70 to 150 and 50 to 200 %), gamma (0.8 to 1.2, below 1 brightens dark tones). At 0, 100,
 # 100 and 1 nothing runs. color_preset is the menu's profile (default, vivid, clarity, custom), which sets the four.

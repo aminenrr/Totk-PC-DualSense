@@ -42,7 +42,7 @@ jobs:
                      '-I', 'runtime', '-I', "$R/runtime/deps/include", '-I', "$R/runtime/deps/include/vma",
                      '-I', 'runtime/third_party/imgui')
           New-Item -ItemType Directory obj | Out-Null
-          $srcs = 'ds_haptics.c', 'cfg.c', 'input.c', 'ov_input.c', 'input_map.c', 'cfg_probe.c', 'ui/binds_page.cpp'
+          $srcs = 'ds_haptics.c', 'cfg.c', 'input.c', 'ov_input.c', 'input_map.c', 'cfg_probe.c', 'ui/binds_page.cpp', 'resolution.c', 'gfx_present.c'
           $objs = @()
           foreach ($f in $srcs) {
             $o = "obj/" + [IO.Path]::GetFileNameWithoutExtension($f) + ".o"
@@ -50,7 +50,7 @@ jobs:
             if ($LASTEXITCODE) { throw "compile $f failed" }
             $objs += $o
           }
-          & $ar t "$R/runtime/libtotkrt.a" | Select-String -Pattern '^(cfg|input|ov_input|ds_haptics|input_map|cfg_probe|binds_page)\.o$'
+          & $ar t "$R/runtime/libtotkrt.a" | Select-String -Pattern '^(cfg|input|ov_input|ds_haptics|input_map|cfg_probe|binds_page|resolution|gfx_present)\.o$'
           & $ar r "$R/runtime/libtotkrt.a" @objs
           if ($LASTEXITCODE) { throw "llvm-ar failed" }
           & "$R/llvm/bin/llvm-ranlib.exe" "$R/runtime/libtotkrt.a"
@@ -59,6 +59,8 @@ jobs:
           Copy-Item totk.ini.example, THIRD_PARTY_NOTICES.md "$R/" -Force
           Copy-Item HAPTICS_PROGRESS.md "$R/DUALSENSE_HAPTICS.md" -Force
           Copy-Item tools/port_ui_mod.py "$R/tools/" -Force
+          Copy-Item recomp/patches-v143.txt, recomp/patches.py "$R/recomp/" -Force
+          Copy-Item runtime/host.h "$R/runtime/" -Force
           Copy-Item tools/DualSense-UI.bat "$R/" -Force
 
       - name: Pack

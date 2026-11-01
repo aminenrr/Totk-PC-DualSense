@@ -277,6 +277,30 @@ void res_fov_live(void) {
     rt_log("resolution: field of view %d%% of the game's", pct);
 }
 
+// Shadow resolution (TOTK_SHADOW_SCALE, percent of the game's 800 x 800 per cascade, 50..400, live): the base size the
+// shadow setup multiplies is scaled by the factor on page +64 (recomp/patches-v143.txt, set shadow), so the cascades'
+// textures, viewports and everything sized from them follow (400: four 3200 x 3200 maps). The game sizes the maps in
+// its shadow setup, so a change shows when it next runs (at the latest the next load). 100 switches the set off.
+// Runs with res_fov_live.
+#define SHADOW_MIN 50
+#define SHADOW_MAX 400
+void res_shadow_live(void) {
+    static int set = -2, shown = 100;
+    if (set == -2) set = rt_patch_set("shadow");
+    int pct = cfg_int("TOTK_SHADOW_SCALE");
+    pct = pct < SHADOW_MIN ? SHADOW_MIN : pct > SHADOW_MAX ? SHADOW_MAX : pct;
+    if (pct == shown) return;
+    shown = pct;
+    if (set < 0) {
+        rt_log("resolution: this game version has no shadow resolution patch; TOTK_SHADOW_SCALE=%d does nothing", pct);
+        return;
+    }
+    float k = pct / 100.0f;
+    memcpy((uint8_t *)rt_patch_page() + 64, &k, sizeof k);   // before the switch: a site that sees it on reads k
+    rt_patch_switch(set, pct != 100);
+    rt_log("resolution: shadow maps %d%% of the game's (%dx%d per cascade)", pct, 8 * pct, 8 * pct);
+}
+
 void res_wanted(unsigned out[2]) {
     decide();
     out[0] = R.ow, out[1] = R.oh;

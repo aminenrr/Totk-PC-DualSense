@@ -976,3 +976,13 @@ spin subsdk0 1c4e54 1c4e60   # 4 instructions; loads
 spin sdk 2d3654 2d3668   # 6 instructions; loads
 spin sdk 443864 443884   # 9 instructions; loads
 spin sdk 541e54 541f98   # 32 instructions; loads
+
+# Shadow resolution (TOTK_SHADOW_SCALE, percent, res_shadow_live): the shadow setup works out each cascade's size as
+# align8(max(32, scale x base)) from the settings' base size (+0x190 / +0x194, 800 x 800, made floats at 0xf597c and
+# 0xf59a4), stores it (+0x3d8 / +0x3f8) and makes or updates the cascade's textures from it (main+0xf5a1c -> 0xfca60).
+# Each base is multiplied by the factor on page +64. Sites from MacNativeGames games/totk/runtime/game_patches_v143.c
+# patch_shadow_res (MIT, Copyright (c) 2026 MacNativeGames contributors) at 297249b, which multiplies the products at
+# 0xf5998 / 0xf59b8 instead. x12 is free until 0xf59cc writes it; s3 is not read again before the call at 0xf5a1c.
+set shadow   TOTK_SHADOW_PATCH   0
+site shadow main f597c 5e21d842 @page:x12 bd404183 5e21d842 1e230842   # scvtf s2, s2 (width): s2 *= [page+64]
+site shadow main f59a4 5e21d821 @page:x12 bd404183 5e21d821 1e230821   # scvtf s1, s1 (height): s1 *= [page+64]

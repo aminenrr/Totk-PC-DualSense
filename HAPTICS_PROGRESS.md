@@ -50,3 +50,4 @@ Partial curve merge misplaced labels (the mod also adds curves). The mod's whole
 2026-11-01: haptics dropped by the user (coil buzz). Added DualSense trigger vibration for rumble_triggers (input.c ds_trigger_vibration, SDL effect mode 0x06).
 Touchpad click bindable (PAD_TOUCHPAD, ini name "touchpad"); CI also recompiles input_map, cfg_probe, ui/binds_page.
 README "This fork" section is fork-only: drop it before any upstream PR.
+Shadow resolution: patches-v143 set shadow (TOTK_SHADOW_SCALE %, page +64), sites from MacNativeGames patch_shadow_res; all 1.4.3 main sites checked against the user's main. CI copies recomp/patches-v143.txt + patches.py into the release.
