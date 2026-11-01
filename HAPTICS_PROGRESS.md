@@ -36,3 +36,6 @@ Working notes for this fork branch. Dropped before any upstream pull request.
 tools/port_ui_mod.py + DualSense-UI.bat: takes the changed textures of a 1.1.x prompt mod's Common blarc
 (StavaasEVG's Dualsense UI, gamebanana 445517) and its Font External.bfotf into the 1.4.3 files, on top of
 romfs-patches; output romfs-patches-dualsense, loaded with romfs_patches = <folder>. Report in logs/dualsense-ui.json.
+2026-11-01: v1 (fonts + same-shape textures) crashed 1.4.3 at start (null read, after nvn init); fonts now opt-in
+(--fonts). Textures now go in by BNTX transplant (mod's format/size, data appended to BRTD) for a checked list of 19
+(PS face buttons, L1/L2, d-pad, R1/R2, prompt bases, DualSense picture); verified by decoding the 1.4.3 output.

@@ -3,12 +3,13 @@ romfs-patches folder (tools/make_romfs_patches.py), into a new overlay folder fo
 (runtime/romfs.c overlay_init loads one TOTK_ROMFS_PATCHES folder; two overlays may not replace the same file).
 
 Nothing of the mod is copied whole: an archive of another game version would lose that version's UI changes.
-- UI/LayoutArchive/Common.Product.<NNN>.Nin_NX_NVN.blarc.zs of the mod (any version): the textures of its
-  timg/__Combined.bntx that differ from the game's own copy of that archive (or, when the RomFS lacks that version,
-  from the archive this game runs) are written into the image data of the same-named textures of the archive this
-  game runs, taken from the base folder when it patched it (the 60 fps capture fix stays). A texture must keep its
-  format, size, tiling and mips, or it is skipped and listed.
-- Font/Font*.Nin_NX_NVN.bfarc.zs of the mod: its scft/External.bfotf (the button glyph font) replaces the game's,
+- UI/LayoutArchive/Common.Product.<NNN>.Nin_NX_NVN.blarc.zs of the mod (any version): the button and controller
+  textures of its timg/__Combined.bntx (TEXTURES, or --textures) replace the same-named ones in the archive this game
+  runs, in the mod's own format and size (bntx_transplant), taken from the base folder when it patched it (the 60 fps
+  capture fix stays). Other textures the mod's archive has differently are the game's own changes since that version
+  (1.2.0 redrew the 72x72 icons at 108x108) and stay.
+- Font/Font*.Nin_NX_NVN.bfarc.zs of the mod, with --fonts only (a 1.1 External.bfotf in the 1.4.3 archives
+  crashed the game at start, 2026-11-01): its scft/External.bfotf (the button glyph font) replaces the game's,
   when the game's archive has that member.
 Other members the mod changed (layouts, animations: a black screen fix duplicates the base folder's) are listed, not
 taken. The report is printed as JSON. Run with the setup's python (compression.zstd).
@@ -27,6 +28,8 @@ ap.add_argument('--romfs', type=Path, required=True, help='the install folder\'s
 ap.add_argument('--base', type=Path, required=True, help='the romfs-patches folder to build on')
 ap.add_argument('--mod', type=Path, required=True, help='the mod\'s romfs folder (holds UI/ and Font/)')
 ap.add_argument('--out', type=Path, required=True, help='the new overlay folder (replaced)')
+ap.add_argument('--fonts', action='store_true', help='also take the mod\'s scft/External.bfotf (crashed 1.4.3 at start with a 1.1 mod)')
+ap.add_argument('--textures', help='comma-separated texture names to take (default TEXTURES)')
 ap.add_argument('--version', choices=('v111', 'v121', 'v143'), default='v143')
 args = ap.parse_args()
 if not (args.mod / 'UI').is_dir() and not (args.mod / 'Font').is_dir():
@@ -92,6 +95,66 @@ def bntx_textures(data, base):
     return found
 
 
+BRTI_COPY = (0x11, 0x5c)   # from dim to channel types: everything that describes the image but the flags byte
+
+
+def bntx_transplant(game, mod, names):
+    """The BNTX game with the textures named (without the ^ suffix) replaced by those of the BNTX mod, in the mod's
+    own format, size and tiling. The image data goes at the end of the BRTD block (the texture memory pool), which
+    grows by it, page aligned; the relocation table after it moves along. The old images stay, unused. Each texture
+    keeps its own mip count or fewer (its mip offset array has that many slots)."""
+    out = bytearray(game)
+    assert out[:4] == b'BNTX' and out[0x20:0x24] == b'NX  ' and mod[:4] == b'BNTX'
+    rlt, size = struct.unpack_from('<II', out, 0x18)
+    assert size == len(out) and out[rlt:rlt + 4] == b'_RLT'
+    brtd = struct.unpack_from('<Q', out, 0x30)[0]
+    assert out[brtd:brtd + 4] == b'BRTD' and brtd + struct.unpack_from('<I', out, brtd + 8)[0] == rlt
+    sections = struct.unpack_from('<I', out, rlt + 8)[0]
+    data_section = [s for s in range(sections) if struct.unpack_from('<I', out, rlt + 0x18 + 0x18 * s)[0] == brtd]
+    assert len(data_section) == 1, 'no relocation section for the BRTD block'
+    tail, appended = bytes(out[rlt:]), bytearray()
+
+    def infos(d):
+        count, table = struct.unpack_from('<IQ', d, 0x24)
+        found = {}
+        for k in range(count):
+            info = struct.unpack_from('<Q', d, table + 8 * k)[0]
+            assert d[info:info + 4] == b'BRTI'
+            name = struct.unpack_from('<Q', d, info + 0x60)[0]
+            found[d[name + 2:name + 2 + struct.unpack_from('<H', d, name)[0]].decode().split('^')[0]] = info
+        return found
+    gi, mi = infos(out), infos(mod)
+    for name in names:
+        g, m = gi[name], mi[name]
+        gmips, mmips = struct.unpack_from('<H', out, g + 0x16)[0], struct.unpack_from('<H', mod, m + 0x16)[0]
+        assert 1 <= mmips <= gmips, (name, gmips, mmips)
+        moffs = struct.unpack_from(f'<{mmips}Q', mod, struct.unpack_from('<Q', mod, m + 0x70)[0])
+        isize, align = struct.unpack_from('<II', mod, m + 0x50)
+        appended += bytes(-(rlt + len(appended)) % max(align, 0x200))
+        at = rlt + len(appended)
+        appended += mod[moffs[0]:moffs[0] + isize]
+        out[g + BRTI_COPY[0]:g + BRTI_COPY[1]] = mod[m + BRTI_COPY[0]:m + BRTI_COPY[1]]
+        gmp = struct.unpack_from('<Q', out, g + 0x70)[0]
+        for k in range(gmips):
+            struct.pack_into('<Q', out, gmp + 8 * k, at + (moffs[k] - moffs[0] if k < mmips else 0))
+    appended += bytes(-(rlt + len(appended)) % 0x1000)
+    grow = len(appended)
+    out[rlt:] = appended + tail
+    new_rlt = rlt + grow
+    struct.pack_into('<II', out, 0x18, new_rlt, len(out))
+    struct.pack_into('<I', out, new_rlt + 4, new_rlt)
+    struct.pack_into('<I', out, brtd + 8, struct.unpack_from('<I', out, brtd + 8)[0] + grow)
+    s = new_rlt + 0x10 + 0x18 * data_section[0]
+    struct.pack_into('<I', out, s + 0xc, struct.unpack_from('<I', out, s + 0xc)[0] + grow)
+    return bytes(out)
+
+
+# StavaasEVG's Dualsense UI (gamebanana.com/mods/445517), checked by decoding both versions: the PlayStation face
+# buttons, L1/L2, d-pad, R1/R2 shapes, prompt button bases and the controller picture.
+TEXTURES = ('Nt_KeyTexA_00', 'Nt_KeyTexB_00', 'Nt_KeyTexX_00', 'Nt_KeyTexY_00', 'Nt_KeyTexL_00', 'Nt_KeyTexZL_00',
+            'ButtonIconL46NN_00', 'ButtonIconL46NN_01', 'ConProR_00', 'ConProR_Line', 'ConProZR_00', 'ConProZR_Line',
+            'Nt_KeyBtnBaseBoxLL_00', 'Nt_KeyBtnSubBaseAL_00', 'Nt_KeyBtnSubBaseBL_00', 'Controller_Pro', 'Controller_Pro1',
+            'ControllerSh_Pro', 'ControllerSh_Pro1')
 COMMON = {'v111': '110', 'v121': '110', 'v143': '140'}
 ARCHIVE = f'UI/LayoutArchive/Common.Product.{COMMON[args.version]}.Nin_NX_NVN.blarc.zs'
 BNTX = 'timg/__Combined.bntx'
@@ -99,7 +162,7 @@ FONT = 'scft/External.bfotf'
 mod_common = sorted(args.mod.glob('UI/LayoutArchive/Common.Product.*.Nin_NX_NVN.blarc.zs'))
 assert len(mod_common) <= 1, mod_common
 mod_common = mod_common[0].relative_to(args.mod).as_posix() if mod_common else None
-mod_fonts = sorted(p.relative_to(args.mod).as_posix() for p in args.mod.glob('Font/Font*.Nin_NX_NVN.bfarc.zs'))
+mod_fonts = [] if not args.fonts else sorted(p.relative_to(args.mod).as_posix() for p in args.mod.glob('Font/Font*.Nin_NX_NVN.bfarc.zs'))
 assert mod_common or mod_fonts, f'no UI/LayoutArchive/Common.Product.*.blarc.zs or Font/*.bfarc.zs in {args.mod}'
 base_lines = {}
 for line in (args.base / 'manifest.tsv').read_text().splitlines():
@@ -119,7 +182,7 @@ with (args.romfs / 'romfs.bin').open('rb') as image:
     for name, (lo, hi) in sarc_members(pack).items():
         d = zstd.ZstdDict(pack[lo:hi])
         dictionaries[d.dict_id] = d
-    wanted = {ARCHIVE} | set(mod_fonts) | ({mod_common} if mod_common in files else set())
+    wanted = {ARCHIVE} | set(mod_fonts)
     originals = {p: read(p) for p in wanted if p in files}
 
 
@@ -136,30 +199,23 @@ def current(path):
 
 outputs, report = {}, {}
 if mod_common:
-    game = bytearray(unpack(current(ARCHIVE)))
+    game = unpack(current(ARCHIVE))
     mod = unpack((args.mod / mod_common).read_bytes())
-    # The reference the mod's changes are measured against: the game's own copy of the mod's archive version.
-    reference = unpack(originals[mod_common]) if mod_common in originals else unpack(originals[ARCHIVE])
-    gm, mm, rm = sarc_members(game), sarc_members(mod), sarc_members(reference)
-    gt, mt, rt = (bntx_textures(d, m[BNTX][0]) for d, m in ((game, gm), (mod, mm), (reference, rm)))
+    gm, mm = sarc_members(game), sarc_members(mod)
+    gb, mb = game[gm[BNTX][0]:gm[BNTX][1]], mod[mm[BNTX][0]:mm[BNTX][1]]
+    gt, mt = bntx_textures(gb, 0), bntx_textures(mb, 0)
+    names = args.textures.split(',') if args.textures else TEXTURES
     taken, skipped = [], {}
-    for name, (shape, at, size) in sorted(mt.items()):
-        ref = rt.get(name)
-        if ref and ref[0] == shape and reference[ref[1]:ref[1] + ref[2]] == mod[at:at + size]:
-            continue   # unchanged by the mod
-        if name not in gt:
-            skipped[name] = 'not in this game version'
-        elif gt[name][0] != shape:
-            skipped[name] = 'format, size, tiling or mips differ'
+    for name in names:
+        if name not in mt or name not in gt:
+            skipped[name] = 'not in the mod' if name not in mt else 'not in this game version'
+        elif gt[name][0] == mt[name][0] and gb[gt[name][1]:gt[name][1] + gt[name][2]] == mb[mt[name][1]:mt[name][1] + mt[name][2]]:
+            skipped[name] = 'the same as the game\'s'
         else:
-            game[gt[name][1]:gt[name][1] + size] = mod[at:at + size]
             taken.append(name)
-    others = sorted(n for n, (lo, hi) in mm.items()
-                    if n != BNTX and (n not in rm or reference[rm[n][0]:rm[n][1]] != mod[lo:hi]))
-    assert taken, f'no texture of the mod could be taken; skipped: {skipped}'
-    outputs[ARCHIVE] = bytes(game)
-    report['common'] = dict(mod_archive=mod_common, reference='same version' if mod_common in originals
-                            else ARCHIVE, textures=taken, skipped=skipped, other_members_not_taken=others)
+    assert taken, f'no texture of the mod could be taken: {skipped}'
+    outputs[ARCHIVE] = sarc_replace(game, {BNTX: bntx_transplant(gb, mb, taken)})
+    report['common'] = dict(mod_archive=mod_common, textures=taken, skipped=skipped)
 fonts = {}
 for path in mod_fonts:
     if path not in originals:
