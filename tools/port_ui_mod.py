@@ -184,7 +184,8 @@ with (args.romfs / 'romfs.bin').open('rb') as image:
     for name, (lo, hi) in sarc_members(pack).items():
         d = zstd.ZstdDict(pack[lo:hi])
         dictionaries[d.dict_id] = d
-    restbl = sorted((p for p in files if re.fullmatch(r'System/Resource/ResourceSizeTable\.Product\.\d+\.rsizetable\.zs', p)),
+    # 1.4.3: System/Resource/ResourceSizeTable.Product.143.Nin_NX_NVN.rsizetable.zs
+    restbl = sorted((p for p in files if re.fullmatch(r'System/Resource/ResourceSizeTable\.Product\.\d+(\.\w+)?\.rsizetable\.zs', p)),
                     key=lambda p: int(p.split('.')[2]))
     assert restbl, 'no System/Resource/ResourceSizeTable.Product.*.rsizetable.zs in the RomFS'
     RESTBL = restbl[-1]
@@ -249,21 +250,28 @@ if outputs:
     table = bytearray(unpack(current(RESTBL)))
     version, block, crcs, names = struct.unpack_from('<4I', table, 6)
     assert table[:6] == b'RESTBL' and len(table) == 0x16 + 8 * crcs + (block + 4) * names, 'unknown RESTBL layout'
-    grown = {}
-    for path, contents in outputs.items():
-        key = path[:-3] if path.endswith('.zs') else path
-        delta = (len(contents) + 31 & ~31) - (len(unpack(current(path))) + 31 & ~31)
-        if delta <= 0:
-            continue
+    def find(key):
         hits = [0x16 + 8 * i + 4 for i in range(crcs)
                 if struct.unpack_from('<I', table, 0x16 + 8 * i)[0] == zlib.crc32(key.encode())]
         start = 0x16 + 8 * crcs
         hits += [start + (block + 4) * i + block for i in range(names)
                  if table[start + (block + 4) * i:start + (block + 4) * i + block].split(b'\0')[0] == key.encode()]
-        assert hits, f'{key} is not in {RESTBL}'
+        return hits
+
+    grown = {}
+    for path, contents in outputs.items():
+        delta = (len(contents) + 31 & ~31) - (len(unpack(current(path))) + 31 & ~31)
+        if delta <= 0:
+            continue
+        for key in dict.fromkeys((path[:-3] if path.endswith('.zs') else path, path)):
+            hits = find(key)
+            if hits:
+                break
+        assert hits, f'{path} is not in {RESTBL}'
         for at in hits:
             struct.pack_into('<I', table, at, struct.unpack_from('<I', table, at)[0] + delta)
         grown[key] = delta
+
     if grown:
         outputs[RESTBL] = bytes(table)
     report['size_table'] = dict(file=RESTBL, grown=grown)
