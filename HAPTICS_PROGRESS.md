@@ -45,3 +45,4 @@ likely did the same at start). The tool now also writes the newest rsizetable wi
 
 2026-11-01: textures + fonts work in game (with RESTBL). Callout points were off: the tool now copies the mod's values
 into anim/Pa(SystemController|ActionGuide)_00_*.bflan curves that match key for key (73 curves).
+Partial curve merge misplaced labels (the mod also adds curves). The mod's whole bflan is taken when it animates every curve the game's does.

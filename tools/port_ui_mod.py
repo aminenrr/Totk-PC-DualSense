@@ -184,10 +184,16 @@ def flan(d):
 
 
 def flan_merge(game, mod):
-    """The FLAN game with each animation curve the mod's FLAN has with the same pane, target, type and key frames
-    taking the mod's values: the mod moved the callout points and lines for its controller picture."""
+    """The FLAN the mod's controller picture needs, and how many of its curves differ from the game's. When the mod's
+    FLAN animates every curve the game's does (the 1.1 files are the 1.4.3 ones plus the mod's edits, 2026-11-01), it is
+    taken whole: its edits go together (it also adds curves, such as moving the d-pad label when that row shows), and
+    taking only the moved points misplaced labels in game. Otherwise each curve with the same key frames takes the mod's
+    values."""
     g, E = flan(game); m, E2 = flan(mod)
     assert E == E2
+    changed = sum(1 for k in set(g) | set(m) if k not in g or k not in m or [x[0] for x in g[k][1]] != [x[0] for x in m[k][1]])
+    if set(g) <= set(m):
+        return bytes(mod), changed
     out, taken = bytearray(game), 0
     for k, (ct, gk) in g.items():
         if k not in m or m[k][0] != ct or len(m[k][1]) != len(gk) or [x[0][0] for x in m[k][1]] != [x[0][0] for x in gk]:
@@ -199,7 +205,6 @@ def flan_merge(game, mod):
             out[ga:ga + n] = mod[ma:ma + n]
         taken += 1
     return bytes(out), taken
-
 
 # StavaasEVG's Dualsense UI (gamebanana.com/mods/445517), checked by decoding both versions: the PlayStation face
 # buttons, L1/L2, d-pad, R1/R2 shapes, prompt button bases and the controller picture.
