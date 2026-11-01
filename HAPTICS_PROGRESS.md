@@ -39,3 +39,6 @@ romfs-patches; output romfs-patches-dualsense, loaded with romfs_patches = <fold
 2026-11-01: v1 (fonts + same-shape textures) crashed 1.4.3 at start (null read, after nvn init); fonts now opt-in
 (--fonts). Textures now go in by BNTX transplant (mod's format/size, data appended to BRTD) for a checked list of 19
 (PS face buttons, L1/L2, d-pad, R1/R2, prompt bases, DualSense picture); verified by decoding the 1.4.3 output.
+
+2026-11-01: textures-only output crashed at the title too: the archive grew 0.9 MB past its RESTBL entry (the fonts
+likely did the same at start). The tool now also writes the newest rsizetable with grown entries.

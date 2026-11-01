@@ -13,11 +13,13 @@ Nothing of the mod is copied whole: an archive of another game version would los
   when the game's archive has that member.
 Other members the mod changed (layouts, animations: a black screen fix duplicates the base folder's) are listed, not
 taken. The report is printed as JSON. Run with the setup's python (compression.zstd).
+- System/Resource/ResourceSizeTable.Product.<newest>.rsizetable.zs: the entries of the files that grew grow with them.
 """
 import argparse
 import compression.zstd as zstd
 import hashlib
 import json
+import zlib
 import re
 import shutil
 import struct
@@ -182,7 +184,11 @@ with (args.romfs / 'romfs.bin').open('rb') as image:
     for name, (lo, hi) in sarc_members(pack).items():
         d = zstd.ZstdDict(pack[lo:hi])
         dictionaries[d.dict_id] = d
-    wanted = {ARCHIVE} | set(mod_fonts)
+    restbl = sorted((p for p in files if re.fullmatch(r'System/Resource/ResourceSizeTable\.Product\.\d+\.rsizetable\.zs', p)),
+                    key=lambda p: int(p.split('.')[2]))
+    assert restbl, 'no System/Resource/ResourceSizeTable.Product.*.rsizetable.zs in the RomFS'
+    RESTBL = restbl[-1]
+    wanted = {ARCHIVE, RESTBL} | set(mod_fonts)
     originals = {p: read(p) for p in wanted if p in files}
 
 
@@ -235,6 +241,32 @@ for path in mod_fonts:
     others = sorted(n for n, (lo, hi) in mm.items() if n != FONT and (n not in gm or game[gm[n][0]:gm[n][1]] != mod[lo:hi]))
     fonts[path] = dict(taken=FONT, other_members_not_taken=others)
 report['fonts'] = fonts
+
+# The resource size table: the game sizes each file's load buffer from its entry (the path without .zs, by CRC32 or in the
+# name table), so a file that grew past it crashed the game (2026-11-01, both at start with the fonts and at the title
+# with Common). Each grown file's entry grows by as much as the file, 32-byte aligned, keeping the game's own margin.
+if outputs:
+    table = bytearray(unpack(current(RESTBL)))
+    version, block, crcs, names = struct.unpack_from('<4I', table, 6)
+    assert table[:6] == b'RESTBL' and len(table) == 0x16 + 8 * crcs + (block + 4) * names, 'unknown RESTBL layout'
+    grown = {}
+    for path, contents in outputs.items():
+        key = path[:-3] if path.endswith('.zs') else path
+        delta = (len(contents) + 31 & ~31) - (len(unpack(current(path))) + 31 & ~31)
+        if delta <= 0:
+            continue
+        hits = [0x16 + 8 * i + 4 for i in range(crcs)
+                if struct.unpack_from('<I', table, 0x16 + 8 * i)[0] == zlib.crc32(key.encode())]
+        start = 0x16 + 8 * crcs
+        hits += [start + (block + 4) * i + block for i in range(names)
+                 if table[start + (block + 4) * i:start + (block + 4) * i + block].split(b'\0')[0] == key.encode()]
+        assert hits, f'{key} is not in {RESTBL}'
+        for at in hits:
+            struct.pack_into('<I', table, at, struct.unpack_from('<I', table, at)[0] + delta)
+        grown[key] = delta
+    if grown:
+        outputs[RESTBL] = bytes(table)
+    report['size_table'] = dict(file=RESTBL, grown=grown)
 
 if args.out.exists():
     shutil.rmtree(args.out)
