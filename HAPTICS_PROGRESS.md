@@ -17,6 +17,7 @@ Working notes for this fork branch. Dropped before any upstream pull request.
 
 ## Status
 - [x] Code written; the four changed C files compile without warnings (clang cross-compile, -Wall, SDL3 headers). Not linked or run.
+- [x] Test setup: `.github/workflows/ds-haptics-setup.yml` takes upstream TotK-Setup v0.2.8, compiles the 4 changed files with its own llvm (clean), swaps them into runtime/libtotkrt.a and publishes a prerelease (first: ds-haptics-081c7db). Fork-only, drop before upstream PR.
 - [ ] Base recomp tested on the user's PC (upstream build, no haptics).
 - [ ] This branch built on Windows (MSYS2 UCRT64) and run with `ds_haptics = 0`: must behave the same as upstream.
 - [ ] Run with `ds_haptics = 1` + DualSense on USB: check `logs/totk.log` for `ds_haptics:` lines and feel the haptics.
