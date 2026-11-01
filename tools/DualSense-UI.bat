@@ -9,7 +9,7 @@ if "%~2"=="" (
   exit /b 1
 )
 if not exist "%~1\logs" mkdir "%~1\logs"
-"%HERE%python\python.exe" "%HERE%tools\port_ui_mod.py" --version v143 --romfs "%~1\romfs" --base "%~1\romfs-patches" --mod "%~2" --out "%~1\romfs-patches-dualsense" > "%~1\logs\dualsense-ui.json" 2>&1
+"%HERE%python\python.exe" "%HERE%tools\port_ui_mod.py" --version v143 --romfs "%~1\romfs" --base "%~1\romfs-patches" --mod "%~2" --out "%~1\romfs-patches-dualsense" %3 %4 > "%~1\logs\dualsense-ui.json" 2>&1
 set "CODE=%ERRORLEVEL%"
 type "%~1\logs\dualsense-ui.json"
 if not "%CODE%"=="0" echo FAILED, see %~1\logs\dualsense-ui.json
