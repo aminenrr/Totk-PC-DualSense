@@ -50,7 +50,8 @@ int input_cursor_released(void);   // Esc or a non-client activation released th
 int input_rumble(uint16_t low, uint16_t high, uint32_t ms);
 // Motor value for a normalised amplitude: pow(a, curve) * strength, saturated to 0..65535. Pure.
 uint16_t rumble_motor(float a, float curve, float strength);
-// TOTK_RUMBLE_TRIGGERS=1: input_rumble also drives the impulse triggers (Xbox) with the high motor's value.
+// TOTK_RUMBLE_TRIGGERS=1: input_rumble also drives the impulse triggers (Xbox), or the adaptive triggers' vibration
+// mode (DualSense, input.c ds_trigger_vibration), with the high motor's value.
 int input_rumble_triggers_enabled(void);
 // 1 while the open gamepad is a DualSense or DualSense Edge connected by USB (runtime/ds_haptics.c). Any thread.
 int input_pad_dualsense_usb(void);

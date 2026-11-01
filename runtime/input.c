@@ -596,6 +596,27 @@ int input_rumble_triggers_enabled(void) {
     return cfg_bool("TOTK_RUMBLE_TRIGGERS");
 }
 
+// A DualSense has no trigger rumble motors (SDL_RumbleGamepadTriggers fails on it); its adaptive triggers have a
+// vibration mode instead. The effect report is SDL's DS5EffectsState_t (SDL test/testcontroller.c): byte 0 bits 0x04
+// and 0x08 select the right and left trigger effects at bytes 10 and 21; mode 0x06 vibrates (frequency in Hz, strength,
+// start position 0: the whole pull), mode 0x05 turns the effect off. Sent only when the strength step changes. lock held.
+#define DS_TRIGGER_HZ 40
+static int ds_trigger_level = -1;
+static SDL_Gamepad *ds_trigger_pad;
+static void ds_trigger_vibration(uint16_t high) {
+    int level = high >> 10;                       // 64 steps
+    if (!pad || SDL_GetGamepadType(pad) != SDL_GAMEPAD_TYPE_PS5) return;   // the report is the DualSense's only
+    if (pad != ds_trigger_pad) ds_trigger_pad = pad, ds_trigger_level = -1;
+    if (level == ds_trigger_level) return;
+    uint8_t fx[47] = {0};
+    fx[0] = 0x04 | 0x08;
+    uint8_t effect[11] = {0x05};
+    if (level) effect[0] = 0x06, effect[1] = DS_TRIGGER_HZ, effect[2] = (uint8_t)(level * 4 + 3), effect[3] = 0;
+    memcpy(fx + 10, effect, 11);
+    memcpy(fx + 21, effect, 11);
+    if (SDL_SendGamepadEffect(pad, fx, sizeof fx) || !level) ds_trigger_level = level;
+}
+
 int input_rumble(uint16_t low, uint16_t high, uint32_t ms) {
     int ok = 0;
     static int triggers = -1;
@@ -604,8 +625,10 @@ int input_rumble(uint16_t low, uint16_t high, uint32_t ms) {
     plat_mutex_lock(&lock);
     if (state == 1 && pad && pad_rumble) {
         ok = SDL_RumbleGamepad(pad, low, high, ms);
-        if (triggers) SDL_RumbleGamepadTriggers(pad, high, high, ms);   // unsupported pads return false: ignored
-    }
+        if (triggers && SDL_GetGamepadType(pad) == SDL_GAMEPAD_TYPE_PS5) ds_trigger_vibration(high);
+        else if (triggers) SDL_RumbleGamepadTriggers(pad, high, high, ms);   // unsupported pads return false: ignored
+    } else if (state == 1 && pad) ds_trigger_vibration(0);
+    if (!triggers && pad) ds_trigger_vibration(0);
     plat_mutex_unlock(&lock);
     return ok;
 }
