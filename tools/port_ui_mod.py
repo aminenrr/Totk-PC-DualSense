@@ -29,6 +29,11 @@ ap.add_argument('--mod', type=Path, required=True, help='the mod\'s romfs folder
 ap.add_argument('--out', type=Path, required=True, help='the new overlay folder (replaced)')
 ap.add_argument('--version', choices=('v111', 'v121', 'v143'), default='v143')
 args = ap.parse_args()
+if not (args.mod / 'UI').is_dir() and not (args.mod / 'Font').is_dir():
+    # an unzipped mod folder: the romfs folder somewhere inside it
+    found = sorted(p for p in args.mod.rglob('romfs') if p.is_dir() and ((p / 'UI').is_dir() or (p / 'Font').is_dir()))
+    assert len(found) == 1, f'{args.mod}: expected one romfs folder with UI/ or Font/ inside, found {found}'
+    args.mod = found[0]
 index = json.loads((args.romfs / 'index.json').read_text())
 assert index['status'] == 'pass'
 files = {f['path']: f for f in index['files']}
