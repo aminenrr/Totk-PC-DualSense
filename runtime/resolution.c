@@ -240,6 +240,7 @@ void res_init(void) {
     }
     rt_log("resolution: output %ux%u, scene %ux%u%s; texture heap +%llu KiB", R.ow, R.oh, R.sw, R.sh,
            scene_on ? "" : " (the game's own 5/6 of the output)", (unsigned long long)res_heap_extra_kib());
+    res_shadow_live();   // before the game's code runs: its shadow setup may size the maps only once, before any present
 }
 
 // 16:9 within 1% (1366x768 counts): the shape the game's own layouts and camera are made for.
@@ -281,7 +282,7 @@ void res_fov_live(void) {
 // shadow setup multiplies is scaled by the factor on page +64 (recomp/patches-v143.txt, set shadow), so the cascades'
 // textures, viewports and everything sized from them follow (400: four 3200 x 3200 maps). The game sizes the maps in
 // its shadow setup, so a change shows when it next runs (at the latest the next load). 100 switches the set off.
-// Runs with res_fov_live.
+// Runs from res_init (before the game starts) and with res_fov_live.
 #define SHADOW_MIN 50
 #define SHADOW_MAX 400
 void res_shadow_live(void) {
