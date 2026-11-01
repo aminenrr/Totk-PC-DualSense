@@ -7,6 +7,46 @@
 >
 > The game is built from your files on your machine, so the result contains the game. It is for your own use. Do not share it.
 
+## This fork: DualSense additions
+
+> [!NOTE]
+> This is a fork of [valentderah/totk-pc-recomp](https://github.com/valentderah/totk-pc-recomp) with DualSense extras, tested on game update 1.4.3. Test builds are on the [Releases](https://github.com/aminenrr/totk-pc-hd-rumble/releases) page (`TotK-Setup-0.2.8-dshaptics-<commit>-windows.zip`). Run the setup on your install folder the same way as upstream. A rerun keeps your romfs, saves and `totk.ini`.
+
+### What's added
+
+- **PlayStation button prompts**: a tool that ports a DualSense UI mod onto your own 1.4.3 files (see below).
+- **Touchpad as a button**: the touchpad click can be bound in the F1 menu's bindings, for example to Minus.
+- **Trigger vibration on DualSense**: the existing "Trigger vibration (Xbox)" setting (`rumble_triggers = 1` under `[input]`) also vibrates the DualSense's adaptive triggers, using the right rumble motor's strength.
+- **HD haptics over USB (experimental)**: drives the DualSense's voice coils from the game's HD Rumble data. It works, but it still feels like a plain coil buzz rather than Joy-Con HD Rumble, so it is off by default. To try it, add the following under `[input]` (USB only):
+
+  ```ini
+  ds_haptics = 1
+  ds_haptics_strength = 200   ; 10..200
+  ds_haptics_curve = 0.4      ; 0.3..1, lower makes weak vibrations stronger
+  ds_haptics_freq = 100       ; 25..100 %
+  ```
+
+### Installing the DualSense UI
+
+1. Download **StavaasEVG's Dualsense UI** from GameBanana: <https://gamebanana.com/mods/445517>. Pick a colour, such as `stavaasevg_s_dualsense_ui_black.zip`, and unzip it.
+2. Run this from the unzipped setup folder, giving your install folder and the mod's folder (or its `romfs` folder inside it):
+
+   ```bat
+   DualSense-UI.bat "C:\Games\TotK" "C:\Downloads\stavaasevg_s_dualsense_ui_black"
+   ```
+
+   It should print `"status": "pass"`. It writes `romfs-patches-dualsense` in the install folder, with a report in `logs\dualsense-ui.json`. It takes the mod's button and controller textures, its button font, and its controller-picture callouts. It also grows the game's resource size table to fit them, and keeps the 60 fps patches of `romfs-patches`.
+3. In `totk.ini`, add:
+
+   ```ini
+   [files]
+   romfs_patches = C:\Games\TotK\romfs-patches-dualsense
+   ```
+
+4. Start the game. To undo it, delete that line. After rerunning the setup (an update), run `DualSense-UI.bat` again rather than restoring an old copy of the folder.
+
+The mod was made for game version 1.1. The tool doesn't copy its layouts or shaders, only the parts listed above.
+
 ## Status
 
 Early development. The game is playable on Windows; visual bugs and crashes are still expected.

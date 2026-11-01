@@ -49,3 +49,4 @@ Partial curve merge misplaced labels (the mod also adds curves). The mod's whole
 
 2026-11-01: haptics dropped by the user (coil buzz). Added DualSense trigger vibration for rumble_triggers (input.c ds_trigger_vibration, SDL effect mode 0x06).
 Touchpad click bindable (PAD_TOUCHPAD, ini name "touchpad"); CI also recompiles input_map, cfg_probe, ui/binds_page.
+README "This fork" section is fork-only: drop it before any upstream PR.
