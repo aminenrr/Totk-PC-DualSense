@@ -1,0 +1,75 @@
+# Fork-only (dropped before an upstream pull request): builds TotK-Setup with the DualSense HD haptics in it.
+# It takes the upstream release whose commit this branch is based on, compiles the runtime files this branch changes
+# with that release's own llvm/ and deps, swaps them into its runtime/libtotkrt.a, and publishes the zip as a prerelease.
+# No game data is involved: the setup still builds the game from the player's own files.
+name: DualSense haptics setup
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [dualsense-hd-haptics]
+    paths: ['runtime/**', '.github/workflows/ds-haptics-setup.yml', 'totk.ini.example']
+
+permissions:
+  contents: write
+
+env:
+  BASE_TAG: v0.2.8
+  BASE_ZIP: TotK-Setup-0.2.8-windows.zip
+  BASE_DIR: TotK-Setup-0.2.8-windows
+
+jobs:
+  setup:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Fetch the upstream release
+        shell: pwsh
+        run: |
+          Invoke-WebRequest "https://github.com/valentderah/totk-pc-recomp/releases/download/$env:BASE_TAG/$env:BASE_ZIP" -OutFile base.zip
+          Expand-Archive base.zip -DestinationPath rel
+          Get-Content "rel/$env:BASE_DIR/VERSION"
+
+      - name: Compile the changed runtime files and swap them into libtotkrt.a
+        shell: pwsh
+        run: |
+          $R = (Resolve-Path "rel/$env:BASE_DIR").Path
+          $cc = "$R/llvm/bin/x86_64-w64-mingw32-clang.exe"
+          $ar = "$R/llvm/bin/llvm-ar.exe"
+          # tools/build_game.py RT_FLAGS on Windows, with the release's deps headers (SDL3, Vulkan, VMA)
+          $flags = @('-O2', '-g', '-Wall', '-fno-strict-aliasing', '-march=x86-64-v3', '-D_WIN32_WINNT=0x0A00',
+                     '-I', 'runtime', '-I', "$R/runtime/deps/include", '-I', "$R/runtime/deps/include/vma",
+                     '-I', 'runtime/third_party/imgui')
+          New-Item -ItemType Directory obj | Out-Null
+          foreach ($f in 'ds_haptics', 'cfg', 'input', 'ov_input') {
+            & $cc @flags -c "runtime/$f.c" -o "obj/$f.o"
+            if ($LASTEXITCODE) { throw "compile $f failed" }
+          }
+          & $ar t "$R/runtime/libtotkrt.a" | Select-String -Pattern '^(cfg|input|ov_input|ds_haptics)\.o$'
+          & $ar r "$R/runtime/libtotkrt.a" obj/ds_haptics.o obj/cfg.o obj/input.o obj/ov_input.o
+          if ($LASTEXITCODE) { throw "llvm-ar failed" }
+          & "$R/llvm/bin/llvm-ranlib.exe" "$R/runtime/libtotkrt.a"
+          & "$R/llvm/bin/llvm-nm.exe" "$R/runtime/libtotkrt.a" | Select-String 'ds_haptics_take|input_pad_dualsense_usb'
+          Copy-Item runtime/input.h, runtime/ds_haptics.h "$R/runtime/" -Force
+          Copy-Item totk.ini.example, THIRD_PARTY_NOTICES.md "$R/" -Force
+          Copy-Item HAPTICS_PROGRESS.md "$R/DUALSENSE_HAPTICS.md" -Force
+
+      - name: Pack
+        shell: pwsh
+        run: |
+          $sha = "${{ github.sha }}".Substring(0, 7)
+          $name = "TotK-Setup-0.2.8-dshaptics-$sha-windows"
+          Rename-Item "rel/$env:BASE_DIR" $name
+          Compress-Archive "rel/$name" "$name.zip"
+          "ZIP=$name.zip" | Out-File $env:GITHUB_ENV -Append
+          "TAG=ds-haptics-$sha" | Out-File $env:GITHUB_ENV -Append
+
+      - name: Publish a prerelease
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create $env:TAG $env:ZIP --repo ${{ github.repository }} --target ${{ github.sha }} --prerelease `
+            --title "DualSense HD haptics test build ($env:TAG)" `
+            --notes "TotK-Setup $env:BASE_TAG with USB DualSense HD haptics (branch dualsense-hd-haptics, ${{ github.sha }}). Off by default: add ds_haptics = 1 to totk.ini. No game data included."
