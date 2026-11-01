@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
   push:
     branches: [dualsense-hd-haptics]
-    paths: ['runtime/**', '.github/workflows/ds-haptics-setup.yml', 'totk.ini.example']
+    paths: ['runtime/**', '.github/workflows/ds-haptics-setup.yml', 'totk.ini.example', 'tools/port_ui_mod.py', 'tools/DualSense-UI.bat']
 
 permissions:
   contents: write
@@ -54,6 +54,8 @@ jobs:
           Copy-Item runtime/input.h, runtime/ds_haptics.h "$R/runtime/" -Force
           Copy-Item totk.ini.example, THIRD_PARTY_NOTICES.md "$R/" -Force
           Copy-Item HAPTICS_PROGRESS.md "$R/DUALSENSE_HAPTICS.md" -Force
+          Copy-Item tools/port_ui_mod.py "$R/tools/" -Force
+          Copy-Item tools/DualSense-UI.bat "$R/" -Force
 
       - name: Pack
         shell: pwsh

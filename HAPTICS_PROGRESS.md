@@ -31,3 +31,8 @@ Working notes for this fork branch. Dropped before any upstream pull request.
 - Opening the audio stream happens on the first vibration (one-time small hitch possible).
 - SDL's own PS5 driver rumble is sent as 0 while HD haptics run; confirm no fighting/buzz.
 - Possible follow-ups: an in-game menu toggle, tuning the curve/strength after the user tests it.
+
+## DualSense button prompts (fork only, untested)
+tools/port_ui_mod.py + DualSense-UI.bat: takes the changed textures of a 1.1.x prompt mod's Common blarc
+(StavaasEVG's Dualsense UI, gamebanana 445517) and its Font External.bfotf into the 1.4.3 files, on top of
+romfs-patches; output romfs-patches-dualsense, loaded with romfs_patches = <folder>. Report in logs/dualsense-ui.json.
