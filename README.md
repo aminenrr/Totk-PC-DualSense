@@ -10,13 +10,13 @@
 ## This fork: DualSense additions
 
 > [!NOTE]
-> This is a fork of [valentderah/totk-pc-recomp](https://github.com/valentderah/totk-pc-recomp) with DualSense extras, tested on game update 1.4.3. Test builds are on the [Releases](https://github.com/aminenrr/totk-pc-hd-rumble/releases) page (`TotK-Setup-0.2.8-dshaptics-<commit>-windows.zip`). Run the setup on your install folder the same way as upstream. A rerun keeps your romfs, saves and `totk.ini`.
+> This is a fork of [valentderah/totk-pc-recomp](https://github.com/valentderah/totk-pc-recomp) with DualSense extras: PlayStation button prompts, the touchpad as a bindable button, impulse-trigger-style vibration in the adaptive triggers, and experimental HD haptics. Tested on game update 1.4.3. Test builds are on the [Releases](https://github.com/aminenrr/Totk-PC-DualSense/releases) page (`TotK-Setup-0.2.8-dshaptics-<commit>-windows.zip`). Run the setup on your install folder the same way as upstream. A rerun keeps your romfs, saves and `totk.ini`.
 
 ### What's added
 
 - **PlayStation button prompts**: a tool that ports a DualSense UI mod onto your own 1.4.3 files (see below).
-- **Touchpad as a button**: the touchpad click can be bound in the F1 menu's bindings, for example to Minus.
-- **Trigger vibration on DualSense**: the existing "Trigger vibration (Xbox)" setting (`rumble_triggers = 1` under `[input]`) also vibrates the DualSense's adaptive triggers, using the right rumble motor's strength.
+- **Touchpad as a button**: the touchpad click is a gamepad button of its own (`touchpad` in `totk.ini`). To use it as Minus instead of the Create/Share button, press F1, open the bindings, select the gamepad cell of Minus, and press the touchpad.
+- **Impulse triggers on DualSense**: the Xbox impulse-trigger rumble now has a DualSense version. With "Trigger vibration (Xbox)" on in the F1 menu (`rumble_triggers = 1` under `[input]`), the adaptive triggers vibrate along with the rumble, as strong as the right motor, the same signal the Xbox triggers get. It works over USB.
 - **HD haptics over USB (experimental)**: drives the DualSense's voice coils from the game's HD Rumble data. It works, but it still feels like a plain coil buzz rather than Joy-Con HD Rumble, so it is off by default. To try it, add the following under `[input]` (USB only):
 
   ```ini
