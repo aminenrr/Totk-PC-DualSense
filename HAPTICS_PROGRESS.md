@@ -48,3 +48,4 @@ into anim/Pa(SystemController|ActionGuide)_00_*.bflan curves that match key for 
 Partial curve merge misplaced labels (the mod also adds curves). The mod's whole bflan is taken when it animates every curve the game's does.
 
 2026-11-01: haptics dropped by the user (coil buzz). Added DualSense trigger vibration for rumble_triggers (input.c ds_trigger_vibration, SDL effect mode 0x06).
+Touchpad click bindable (PAD_TOUCHPAD, ini name "touchpad"); CI also recompiles input_map, cfg_probe, ui/binds_page.

@@ -21,7 +21,8 @@ void rt_log(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
 static_assert(UI_BIND_RSTICK_DOWN - UI_BIND_A == ACTION_COUNT - 1, "UI_BIND_* follow the actions");
 static_assert(UI_BIND_DESC_MINUS - UI_BIND_DESC_A == B_MINUS, "UI_BIND_DESC_* follow the actions");
 static_assert(UI_KEY_PAGEDOWN - UI_KEY_SPACE == KEY_PAGEDOWN - KEY_SPACE, "UI_KEY_* follow the key ids");
-static_assert(UI_PAD_RPADDLE2 - UI_PAD_SOUTH == PAD_RPADDLE2 - PAD_SOUTH && PAD_RPADDLE2 == PAD_COUNT - 1,
+static_assert(UI_PAD_RPADDLE2 - UI_PAD_SOUTH == PAD_RPADDLE2 - PAD_SOUTH && PAD_RPADDLE2 == PAD_TOUCHPAD - 1 &&
+              PAD_TOUCHPAD == PAD_COUNT - 1,
               "UI_PAD_* follow the pad ids");
 
 enum { CAPTURE_SECONDS = 5 };
@@ -97,6 +98,7 @@ static const char *pad_label(int p) {
     case PAD_LABEL_SQUARE: return menu_text(UI_PAD_SQUARE);
     case PAD_LABEL_TRIANGLE: return menu_text(UI_PAD_TRIANGLE);
     }
+    if (p == PAD_TOUCHPAD) return "Touchpad";   // no UI_PAD_* entry: the menu text ids stay as they are
     return menu_text((UiTextId)(UI_PAD_SOUTH + (p - PAD_SOUTH)));
 }
 
